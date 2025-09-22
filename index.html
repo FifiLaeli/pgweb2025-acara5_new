@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Flores Timur</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <style>
+        html, body {
+            margin: 0;
+        }
+        #map {
+            width: 100%;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+<div id="map"></div>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+    // Inisialisasi peta
+    var map = L.map("map").setView([-8.4315803,122.8079224], 11);
+
+    // Tile Layer Base Map
+    var basemap = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution:
+            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    }).addTo(map);
+
+    // --- TOPONIMI (Point) ---
+    let toponimi = L.layerGroup();
+    fetch('DATA/toponimi.geojson')
+        .then(response => response.json())
+        .then(data => {
+            L.geoJSON(data, {
+                pointToLayer: function (feature, latlng) {
+                    return L.marker(latlng, {
+                        icon: L.icon({
+                            iconUrl: "img.png",
+                            iconSize: [32, 32],
+                            iconAnchor: [16, 32],
+                            popupAnchor: [0, -32],
+                            tooltipAnchor: [10, -20],
+                        }),
+                    });
+                },
+                onEachFeature: function (feature, layer) {
+                    var popup_content = "Nama: " + feature.properties.TOPONIMI + "<br>" +
+                        "Koordinat: " + feature.geometry.coordinates[1] + ", " + feature.geometry.coordinates[0];
+                    layer.bindPopup(popup_content);
+                    layer.bindTooltip(feature.properties.TOPONIMI);
+                },
+            }).addTo(toponimi);
+        });
+    toponimi.addTo(map);
+
+    // --- JALAN (Polyline) ---
+    map.createPane('panejalan');
+    map.getPane("panejalan").style.zIndex = 401;
+    var jalan = L.geoJSON(null, {
+        pane: 'panejalan',
+        style: function (feature) {
+            return {
+                color: "red",
+                opacity: 1,
+                weight: 2,
+            };
+        },
+        onEachFeature: function (feature, layer) {
+            layer.bindTooltip(feature.properties.NAMA_UNSUR, {sticky: true});
+            layer.bindPopup("Nama Jalan: " + feature.properties.NAMA_UNSUR);
+        }
+    });
+    $.getJSON("DATA/jalan.geojson", function (data) {
+        jalan.addData(data);
+        map.addLayer(jalan);
+    });
+
+    // GeoJSON Polyline sungai
+        map.createPane('paneSungai');
+        map.getPane("paneSungai").style.zIndex = 401;
+
+        var sungai = L.geoJSON(null, {
+            pane: 'paneSungai',
+            style: function (feature) {
+                return {
+                    color: "blue",
+                    opacity: 0.5,
+                    weight: 2
+                };
+            },
+            onEachFeature: function (feature, layer) {
+                // Tambahkan tooltip (muncul saat hover)
+                layer.bindTooltip(feature.properties.LAYER, {
+                    direction: "auto",
+                    sticky: true
+                });
+
+                // Tambahkan popup (klik untuk info detail)
+                layer.bindPopup("Nama Sungai: " + feature.properties.LAYER);
+            }
+        });
+
+        // Load GeoJSON sungai
+        $.getJSON("DATA/sungai.geojson", function (data) {
+            sungai.addData(data);
+            map.addLayer(sungai);
+        });
+
+
+    // --- BATAS KECAMATAN (Polygon) ---
+    map.createPane('panejumlahpenduduk');
+    map.getPane("panejumlahpenduduk").style.zIndex = 301;
+    var jumlah_penduduk = L.geoJSON(null, {
+        pane: 'panejumlahpenduduk',
+        style: function (feature) {
+            var pend = feature.properties.Penduduk; // pastikan field ini sesuai GeoJSON kamu
+            if (pend <= 15000) {
+                return { color: 'black', weight: 1, opacity: 1, fillOpacity: 0.7, fillColor: '#ffffb2' };
+            } else if (pend > 15000 && pend <= 30000) {
+                return { color: 'black', weight: 1, opacity: 1, fillOpacity: 0.7, fillColor: '#fd8d3c' };
+            } else {
+                return { color: 'black', weight: 1, opacity: 1, fillOpacity: 0.7, fillColor: '#bd0026' };
+            }
+        },
+        onEachFeature: function (feature, layer) {
+            var popup_content = "Kecamatan: " + feature.properties.WADMKC + "<br>" +
+                                "Jumlah Penduduk: " + feature.properties.Penduduk.toLocaleString("id-ID");
+            layer.bindPopup(popup_content);
+            layer.bindTooltip(feature.properties.WADMKC);
+        }
+    });
+
+    $.getJSON("DATA/batas_kecamatan.geojson", function (data) {
+        jumlah_penduduk.addData(data);
+        map.addLayer(jumlah_penduduk);
+    });
+
+            // Control Layer
+        // BaseMaps
+        var baseMaps = {
+            "OpenStreetMap": basemap,
+        };
+
+        // OverlayMaps
+        var overlayMaps = {
+            "Toponimi": toponimi,
+            "Jalan": jalan,
+            "Sungai": sungai,
+            "Jumlah Penduduk": jumlah_penduduk,
+        };
+
+        // Tambahkan kontrol layer
+        var controllayer = L.control.layers(baseMaps, overlayMaps, { collapsed: false });
+        controllayer.addTo(map);
+
+</script>
+</body>
+</html>
